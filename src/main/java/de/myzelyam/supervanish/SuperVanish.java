@@ -8,7 +8,7 @@
 
 package de.myzelyam.supervanish;
 
-import com.comphenix.protocol.ProtocolLibrary;
+import com.github.retrooper.packetevents.PacketEvents;
 import de.myzelyam.api.vanish.VanishAPI;
 import de.myzelyam.supervanish.commands.VanishCommand;
 import de.myzelyam.supervanish.config.ConfigMgr;
@@ -55,7 +55,7 @@ public class SuperVanish extends JavaPlugin implements SuperVanishPlugin {
                     "6.2.12", "6.2.13", "6.2.14", "6.2.15", "6.2.16", "6.2.17", "6.2.18", "6.2.19"};
 
     @Getter
-    private boolean useProtocolLib;
+    private boolean usePacketEvents;
     @Getter
     private ActionBarMgr actionBarMgr;
     @Getter
@@ -83,10 +83,9 @@ public class SuperVanish extends JavaPlugin implements SuperVanishPlugin {
     @Override
     public void onEnable() {
         try {
-            useProtocolLib = getServer().getPluginManager().isPluginEnabled("ProtocolLib");
-            if (!useProtocolLib) log(Level.INFO,
-                    "Please install ProtocolLib to be able to use all SuperVanish features: " +
-                            "https://www.spigotmc.org/resources/protocollib.1997/");
+            usePacketEvents = getServer().getPluginManager().isPluginEnabled("packetevents");
+            if (!usePacketEvents) log(Level.INFO,
+                    "Please install packetevents to be able to use all SuperVanish features.");
             configMgr = new ConfigMgr(this);
             configMgr.prepareFiles();
             placeholderConverter = new PlaceholderConverter(this);
@@ -97,9 +96,9 @@ public class SuperVanish extends JavaPlugin implements SuperVanishPlugin {
             if (getSettings().getBoolean("MiscellaneousOptions.UpdateChecker.Enable", true))
                 updateNotifier = new UpdateNotifier(this);
             visibilityChanger = new VisibilityChanger(new PreventionHider(this), this);
-            if (versionUtil.isOneDotXOrHigher(8) && useProtocolLib)
+            if (versionUtil.isOneDotXOrHigher(8) && usePacketEvents)
                 actionBarMgr = new ActionBarMgr(this);
-            if (useProtocolLib && ServerListPacketListener.isEnabled(this))
+            if (usePacketEvents && ServerListPacketListener.isEnabled(this))
                 ServerListPacketListener.register(this);
             registerEvents();
             new PluginHookMgr(this);
@@ -153,8 +152,8 @@ public class SuperVanish extends JavaPlugin implements SuperVanishPlugin {
     public void reload() {
         getServer().getScheduler().cancelTasks(this);
         HandlerList.unregisterAll(this);
-        if (useProtocolLib)
-            ProtocolLibrary.getProtocolManager().removePacketListeners(this);
+        if (usePacketEvents)
+            PacketEvents.getAPI().getEventManager().unregisterAllListeners();
         onDisable();
         onEnable();
     }

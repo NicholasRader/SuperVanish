@@ -27,7 +27,7 @@ import lombok.Data;
 
 public class FeatureMgr {
 
-    private static final Requirement<FeatureInfo> protocolLibInstalled = featureInfo -> Bukkit.getPluginManager().isPluginEnabled("ProtocolLib"),
+    private static final Requirement<FeatureInfo> packetEventsInstalled = featureInfo -> Bukkit.getPluginManager().isPluginEnabled("packetevents"),
             oneDotEightOrHigher = featureInfo -> featureInfo.getPlugin().getVersionUtil().isOneDotXOrHigher(8),
             oneDotSeventeenOrHigher = featureInfo -> featureInfo.getPlugin().getVersionUtil().isOneDotXOrHigher(17),
             supportedServer = featureInfo -> Bukkit.getServer().getName().equals("Paper") || Bukkit.getServer().getName().equals("Purpur");
@@ -38,11 +38,11 @@ public class FeatureMgr {
     public FeatureMgr(SuperVanish plugin) {
         this.plugin = plugin;
         registeredFeatures.put("SilentOpenChest", new FeatureInfo(SilentOpenChest.class, plugin,
-                Arrays.asList(protocolLibInstalled, oneDotEightOrHigher)));
+                Arrays.asList(packetEventsInstalled, oneDotEightOrHigher)));
         registeredFeatures.put("NightVision", new FeatureInfo(NightVision.class, plugin,
-                Arrays.asList(protocolLibInstalled, oneDotEightOrHigher)));
+                Arrays.asList(packetEventsInstalled, oneDotEightOrHigher)));
         registeredFeatures.put("VanishIndication", new FeatureInfo(VanishIndication.class, plugin,
-                Arrays.asList(protocolLibInstalled, oneDotEightOrHigher)));
+                Arrays.asList(packetEventsInstalled, oneDotEightOrHigher)));
         registeredFeatures.put("Broadcast", new FeatureInfo(Broadcast.class, plugin));
         registeredFeatures.put("NoSculkSensorDetection", new FeatureInfo(NoSculkSensorDetection.class, plugin,
                 Collections.singletonList(oneDotSeventeenOrHigher)));

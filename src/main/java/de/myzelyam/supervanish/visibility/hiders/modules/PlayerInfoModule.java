@@ -8,12 +8,12 @@
 
 package de.myzelyam.supervanish.visibility.hiders.modules;
 
-import com.comphenix.protocol.PacketType;
-import com.comphenix.protocol.ProtocolLibrary;
-import com.comphenix.protocol.events.ListenerPriority;
-import com.comphenix.protocol.events.PacketAdapter;
-import com.comphenix.protocol.events.PacketEvent;
-import com.comphenix.protocol.wrappers.PlayerInfoData;
+import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.event.PacketListener;
+import com.github.retrooper.packetevents.event.PacketListenerPriority;
+import com.github.retrooper.packetevents.event.PacketSendEvent;
+import com.github.retrooper.packetevents.protocol.packettype.PacketType;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo;
 import com.google.common.collect.ImmutableList;
 import de.myzelyam.supervanish.SuperVanish;
 import de.myzelyam.supervanish.visibility.hiders.PlayerHider;
@@ -25,7 +25,7 @@ import java.util.List;
 /**
  * This is currently unused on Minecraft 1.19 or higher
  */
-public class PlayerInfoModule extends PacketAdapter {
+public class PlayerInfoModule implements PacketListener {
 
     private final PlayerHider hider;
     private final SuperVanish plugin;
@@ -33,44 +33,49 @@ public class PlayerInfoModule extends PacketAdapter {
     private boolean errorLogged = false;
 
     public PlayerInfoModule(SuperVanish plugin, PlayerHider hider) {
-        super(plugin, ListenerPriority.HIGH, PacketType.Play.Server.PLAYER_INFO);
         this.plugin = plugin;
         this.hider = hider;
     }
 
     public static void register(SuperVanish plugin, PlayerHider hider) {
-        ProtocolLibrary.getProtocolManager().addPacketListener(new PlayerInfoModule(plugin, hider));
+        PacketEvents.getAPI().getEventManager().registerListener(new PlayerInfoModule(plugin, hider), PacketListenerPriority.HIGH);
     }
 
     @Override
-    public void onPacketSending(PacketEvent event) {
-        // multiple events share same packet object
-        event.setPacket(event.getPacket().shallowClone());
-        try {
-            List<PlayerInfoData> infoDataList = new ArrayList<>(event.getPacket().getPlayerInfoDataLists().read(0));
+    public void onPacketSend(PacketSendEvent e) {
+        if (e.getPacketType() != PacketType.Play.Server.PLAYER_INFO) {
+            return;
+        }
 
-            Player receiver = event.getPlayer();
-            for (PlayerInfoData infoData : ImmutableList.copyOf(infoDataList)) {
-                if (hider.isHidden(infoData.getProfile().getUUID(), receiver)) {
+        try {
+            WrapperPlayServerPlayerInfo packet = new WrapperPlayServerPlayerInfo(e);
+            List<WrapperPlayServerPlayerInfo.PlayerData> infoDataList = new ArrayList<>(packet.getPlayerDataList());
+
+            if (infoDataList.isEmpty()) {
+                e.setCancelled(true);
+                return;
+            }
+
+            Player receiver = e.getPlayer();
+            for (WrapperPlayServerPlayerInfo.PlayerData infoData : ImmutableList.copyOf(infoDataList)) {
+                if (hider.isHidden(infoData.getUserProfile().getUUID(), receiver)) {
                     infoDataList.remove(infoData);
                 }
             }
-            if (infoDataList.isEmpty()) {
-                event.setCancelled(true);
-            }
-            event.getPacket().getPlayerInfoDataLists().write(0, infoDataList);
-        } catch (Exception | NoClassDefFoundError e) {
-            if (e.getMessage() == null
-                    || !e.getMessage().endsWith("is not supported for temporary players.")) {
+
+            packet.setPlayerDataList(infoDataList);
+        } catch (Exception | NoClassDefFoundError ex) {
+            if (ex.getMessage() == null
+                    || !ex.getMessage().endsWith("is not supported for temporary players.")) {
                 if (errorLogged) return;
-                plugin.logException(e);
+                plugin.logException(ex);
                 plugin.getLogger().warning("IMPORTANT: Please make sure that you are using the latest " +
-                        "dev-build of ProtocolLib and that your server is up-to-date! This error likely " +
-                        "happened inside of ProtocolLib code which is out of SuperVanish's control. It's part " +
+                        "dev-build of packetevents and that your server is up-to-date! This error likely " +
+                        "happened inside of packetevents code which is out of SuperVanish's control. It's part " +
                         "of an optional invisibility module and can be removed safely by disabling " +
                         "ModifyTablistPackets in the config. Please report this " +
                         "error if you can reproduce it on an up-to-date server with only latest " +
-                        "ProtocolLib and latest SV installed.");
+                        "packetevents and latest SV installed.");
                 errorLogged = true;
             }
         }

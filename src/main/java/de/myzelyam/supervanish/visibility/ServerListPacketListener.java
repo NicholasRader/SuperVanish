@@ -8,27 +8,22 @@
 
 package de.myzelyam.supervanish.visibility;
 
-import com.comphenix.protocol.PacketType;
-import com.comphenix.protocol.ProtocolLibrary;
-import com.comphenix.protocol.events.ListenerPriority;
-import com.comphenix.protocol.events.PacketAdapter;
-import com.comphenix.protocol.events.PacketEvent;
-import com.comphenix.protocol.wrappers.WrappedGameProfile;
-import com.comphenix.protocol.wrappers.WrappedServerPing;
-
+import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.event.PacketListener;
+import com.github.retrooper.packetevents.event.PacketListenerPriority;
+import com.github.retrooper.packetevents.event.PacketSendEvent;
+import com.github.retrooper.packetevents.protocol.packettype.PacketType;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPing;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerListHeaderAndFooter;
+import com.github.retrooper.packetevents.wrapper.status.client.WrapperStatusClientPing;
 import de.myzelyam.supervanish.SuperVanish;
-
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.logging.Level;
 
-public class ServerListPacketListener extends PacketAdapter {
+public class ServerListPacketListener implements PacketListener {
 
     private final SuperVanish plugin;
 
@@ -39,15 +34,6 @@ public class ServerListPacketListener extends PacketAdapter {
         this.plugin = plugin;
     }
 
-    /**
-     * Constructor for legacy ProtocolLib API
-     */
-    public ServerListPacketListener(SuperVanish plugin, boolean use_legacy) {
-        //noinspection deprecation
-        super(plugin, ListenerPriority.NORMAL, PacketType.Status.Server.OUT_SERVER_INFO);
-        this.plugin = plugin;
-    }
-
     public static void register(SuperVanish plugin) {
         // Use Paper event listener if available
         try {
@@ -55,12 +41,7 @@ public class ServerListPacketListener extends PacketAdapter {
             plugin.getLogger().log(Level.INFO, "Hooked into PaperSpigot for server list ping support");
             plugin.getServer().getPluginManager().registerEvents(new PaperServerPingListener(plugin), plugin);
         } catch (ClassNotFoundException ignored) {
-            // Otherwise use ProtocolLib
-            if (plugin.getVersionUtil().isOneDotXOrHigher(19)) {
-                ProtocolLibrary.getProtocolManager().addPacketListener(new ServerListPacketListener(plugin));
-            } else {
-                ProtocolLibrary.getProtocolManager().addPacketListener(new ServerListPacketListener(plugin, true));
-            }
+            PacketEvents.getAPI().getEventManager().registerListener(new ServerListPacketListener(plugin), PacketListenerPriority.NORMAL);
         }
     }
 
@@ -73,12 +54,15 @@ public class ServerListPacketListener extends PacketAdapter {
     }
 
     @Override
-    public void onPacketSending(PacketEvent e) {
+    public void onPacketSend(PacketSendEvent e) {
         try {
             final FileConfiguration settings = plugin.getSettings();
             if (!settings.getBoolean("ExternalInvisibility.ServerList.AdjustAmountOfOnlinePlayers")
                     && !settings.getBoolean("ExternalInvisibility.ServerList.AdjustListOfLoggedInPlayers"))
                 return;
+
+            WrapperPlayServerPlayerListHeaderAndFooter ping = new WrapperPlayServerPlayerListHeaderAndFooter(e);
+            WrapperPlayServerPing ping = new WrapperPlayServerPing(e);
             WrappedServerPing ping = e.getPacket().getServerPings().read(0);
             Collection<UUID> onlineVanishedPlayers = plugin.getVanishStateMgr().getOnlineVanishedPlayers();
             int vanishedPlayersCount = plugin.getVanishStateMgr().getOnlineVanishedPlayers().size(),
@@ -100,9 +84,9 @@ public class ServerListPacketListener extends PacketAdapter {
         } catch (Exception er) {
             if (!errorLogged) {
                 if (er.getMessage() != null && er.getMessage().contains("Unable to construct new instance using public net.minecraft.network.protocol.status.ServerPing")) {
-                    plugin.getLogger().warning("The spigot-sided serverlist features are not supported by ProtocolLib on your server. Please make sure you are using the latest ProtocolLib dev build. (" + er.getMessage() + ")\n");
+                    plugin.getLogger().warning("The spigot-sided serverlist features are not supported by packetevents on your server. Please make sure you are using the latest packetevents dev build. (" + er.getMessage() + ")\n");
                 } else if (er.getMessage() != null && er.getMessage().contains("Cannot assign field \"online\" because \"this.playerSample\" is null")) {
-                    plugin.getLogger().warning("The spigot-sided serverlist features are not supported yet by ProtocolLib. Please make sure you are using the latest ProtocolLib dev build.");
+                    plugin.getLogger().warning("The spigot-sided serverlist features are not supported yet by packetevents. Please make sure you are using the latest packetevents dev build.");
                 } else {
                     plugin.logException(er);
                 }

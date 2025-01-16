@@ -8,12 +8,7 @@
 
 package de.myzelyam.supervanish.visibility.hiders.modules;
 
-import com.comphenix.protocol.PacketType;
-import com.comphenix.protocol.ProtocolLibrary;
-import com.comphenix.protocol.events.ListenerPriority;
-import com.comphenix.protocol.events.PacketAdapter;
-import com.comphenix.protocol.events.PacketEvent;
-import com.comphenix.protocol.reflect.FieldAccessException;
+import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.mojang.brigadier.suggestion.Suggestion;
 import com.mojang.brigadier.suggestion.Suggestions;
 import de.myzelyam.supervanish.SuperVanish;
@@ -63,7 +58,7 @@ public class TabCompleteModule extends PacketAdapter {
                     }
                 } catch (FieldAccessException e) {
                     if (errorLogged) return;
-                    plugin.getLogger().warning("Could not intercept tab-completions using ProtocolLib: "
+                    plugin.getLogger().warning("Could not intercept tab-completions using packetevents: "
                             + e.getMessage());
                     errorLogged = true;
                 }
@@ -89,12 +84,12 @@ public class TabCompleteModule extends PacketAdapter {
                 if (errorLogged) return;
                 plugin.logException(e);
                 plugin.getLogger().warning("IMPORTANT: Please make sure that you are using the latest " +
-                        "dev-build of ProtocolLib and that your server is up-to-date! This error likely " +
-                        "happened inside of ProtocolLib code which is out of SuperVanish's control. It's part " +
+                        "dev-build of packetevents and that your server is up-to-date! This error likely " +
+                        "happened inside of packetevents code which is out of SuperVanish's control. It's part " +
                         "of an optional invisibility module and can be removed safely by disabling " +
                         "ModifyTabCompletePackets in the config. Please report this " +
                         "error if you can reproduce it on an up-to-date server with only latest " +
-                        "ProtocolLib and latest SV installed.");
+                        "packetevents and latest SV installed.");
                 errorLogged = true;
             }
         }

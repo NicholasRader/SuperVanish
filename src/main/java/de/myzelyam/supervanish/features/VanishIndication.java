@@ -8,20 +8,21 @@
 
 package de.myzelyam.supervanish.features;
 
-import com.comphenix.protocol.PacketType;
-import com.comphenix.protocol.ProtocolLibrary;
-import com.comphenix.protocol.events.ListenerPriority;
-import com.comphenix.protocol.events.PacketAdapter;
-import com.comphenix.protocol.events.PacketContainer;
-import com.comphenix.protocol.events.PacketEvent;
-import com.comphenix.protocol.wrappers.EnumWrappers;
-import com.comphenix.protocol.wrappers.PlayerInfoData;
-import com.comphenix.protocol.wrappers.WrappedChatComponent;
-import com.comphenix.protocol.wrappers.WrappedGameProfile;
+import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.event.PacketListener;
+import com.github.retrooper.packetevents.event.PacketListenerPriority;
+import com.github.retrooper.packetevents.event.PacketSendEvent;
+import com.github.retrooper.packetevents.protocol.packettype.PacketType;
+import com.github.retrooper.packetevents.protocol.player.GameMode;
+import com.github.retrooper.packetevents.protocol.player.User;
+import com.github.retrooper.packetevents.protocol.player.UserProfile;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate;
 import com.google.common.collect.ImmutableList;
 import de.myzelyam.api.vanish.PlayerShowEvent;
 import de.myzelyam.api.vanish.PostPlayerHideEvent;
 import de.myzelyam.supervanish.SuperVanish;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -30,10 +31,10 @@ import org.bukkit.event.player.PlayerJoinEvent;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
-
-import static com.comphenix.protocol.PacketType.Play.Server.PLAYER_INFO;
 
 /**
  * This is currently unused on Minecraft 1.19 or higher
@@ -96,76 +97,77 @@ public class VanishIndication extends Feature {
 
     @Override
     public void onEnable() {
-        ProtocolLibrary.getProtocolManager().addPacketListener(
-                new PacketAdapter(plugin, ListenerPriority.NORMAL, PacketType.Play.Server.PLAYER_INFO) {
+        PacketEvents.getAPI().getEventManager().registerListener(
+                new PacketListener() {
                     @Override
-                    public void onPacketSending(PacketEvent event) {
+                    public void onPacketSend(PacketSendEvent e) {
+                        if (e.getPacketType() != PacketType.Play.Server.PLAYER_INFO) return;
+
                         try {
-                            // multiple events share same packet object
-                            event.setPacket(event.getPacket().shallowClone());
-                            List<PlayerInfoData> infoDataList = new ArrayList<>(
-                                    event.getPacket().getPlayerInfoDataLists().read(0));
-                            Player receiver = event.getPlayer();
-                            for (PlayerInfoData infoData : ImmutableList.copyOf(infoDataList)) {
-                                try {
-                                    if (!VanishIndication.this.plugin.getVisibilityChanger().getHider()
-                                            .isHidden(infoData.getProfile().getUUID(), receiver)
-                                            && VanishIndication.this.plugin.getVanishStateMgr()
-                                            .isVanished(infoData.getProfile().getUUID())) {
-                                        if (!receiver.getUniqueId().equals(infoData.getProfile().getUUID()))
-                                            if (infoData.getGameMode() != EnumWrappers.NativeGameMode.SPECTATOR) {
-                                                int latency;
-                                                try {
-                                                    latency = infoData.getLatency();
-                                                } catch (NoSuchMethodError e) {
-                                                    latency = 21;
-                                                }
-                                                if (event.getPacket().getPlayerInfoAction().read(0)
-                                                        != EnumWrappers.PlayerInfoAction.UPDATE_GAME_MODE) {
-                                                    continue;
-                                                }
-                                                PlayerInfoData newData = new PlayerInfoData(infoData.getProfile(),
-                                                        latency, EnumWrappers.NativeGameMode.SPECTATOR,
-                                                        infoData.getDisplayName());
-                                                infoDataList.remove(infoData);
-                                                infoDataList.add(newData);
+                            WrapperPlayServerPlayerInfo packet = new WrapperPlayServerPlayerInfo(e);
+                            if (packet.getAction() != WrapperPlayServerPlayerInfo.Action.UPDATE_GAME_MODE) return;
+
+                            Player receiver = e.getPlayer();
+
+                            List<WrapperPlayServerPlayerInfo.PlayerData> infoDataList = new ArrayList<>(packet.getPlayerDataList());
+                            for (WrapperPlayServerPlayerInfo.PlayerData infoData : ImmutableList.copyOf(infoDataList)) {
+                                if (!VanishIndication.this.plugin.getVisibilityChanger().getHider()
+                                        .isHidden(infoData.getUserProfile().getUUID(), receiver)
+                                        && VanishIndication.this.plugin.getVanishStateMgr()
+                                        .isVanished(infoData.getUserProfile().getUUID())
+                                        && !receiver.getUniqueId().equals(infoData.getUserProfile().getUUID())
+                                        && infoData.getGameMode() != GameMode.SPECTATOR) {
+                                            int latency = infoData.getPing();
+                                            if (packet.getAction() != WrapperPlayServerPlayerInfo.Action.UPDATE_GAME_MODE) {
+                                                continue;
                                             }
-                                    }
-                                } catch (UnsupportedOperationException ignored) {
+                                            WrapperPlayServerPlayerInfo.PlayerData newData = new WrapperPlayServerPlayerInfo.PlayerData(
+                                                    infoData.getDisplayName(),
+                                                    infoData.getUserProfile(),
+                                                    GameMode.SPECTATOR,
+                                                    latency
+                                                    );
+
+                                            infoDataList.remove(infoData);
+                                            infoDataList.add(newData);
                                 }
                             }
-                            event.getPacket().getPlayerInfoDataLists().write(0, infoDataList);
-                        } catch (Exception | NoClassDefFoundError e) {
+
+                            packet.setPlayerDataList(infoDataList);
+                        } catch (Exception | NoClassDefFoundError ex) {
                             if (!suppressErrors) {
-                                VanishIndication.this.plugin.logException(e);
+                                VanishIndication.this.plugin.logException(ex);
                                 plugin.getLogger().warning("IMPORTANT: Please make sure that you are using the latest " +
-                                        "dev-build of ProtocolLib and that your server is up-to-date! This error likely " +
-                                        "happened inside of ProtocolLib code which is out of SuperVanish's control. It's part " +
+                                        "dev-build of packetevents and that your server is up-to-date! This error likely " +
+                                        "happened inside of packetevents code which is out of SuperVanish's control. It's part " +
                                         "of an optional feature module and can be removed safely by disabling " +
                                         "MarkVanishedPlayersAsSpectators in the config file. Please report this " +
                                         "error if you can reproduce it on an up-to-date server with only latest " +
-                                        "ProtocolLib and latest SV installed.");
+                                        "packetevents and latest SV installed.");
                                 suppressErrors = true;
                             }
                         }
                     }
-                });
+                }, PacketListenerPriority.NORMAL);
     }
 
     private void sendPlayerInfoChangeGameModePacket(Player p, Player change, boolean spectator) {
-        PacketContainer packet = new PacketContainer(PLAYER_INFO);
-        packet.getPlayerInfoAction().write(0, EnumWrappers.PlayerInfoAction.UPDATE_GAME_MODE);
-        List<PlayerInfoData> data = new ArrayList<>();
-        int ping = ThreadLocalRandom.current().nextInt(20) + 15;
-        data.add(new PlayerInfoData(WrappedGameProfile.fromPlayer(change), ping,
-                spectator ? EnumWrappers.NativeGameMode.SPECTATOR
-                        : EnumWrappers.NativeGameMode.fromBukkit(change.getGameMode()),
-                WrappedChatComponent.fromText(change.getPlayerListName())));
-        packet.getPlayerInfoDataLists().write(0, data);
-        try {
-            ProtocolLibrary.getProtocolManager().sendServerPacket(p, packet);
-        } catch (InvocationTargetException e) {
-            throw new RuntimeException("Cannot send packet", e);
-        }
+        UserProfile profile = new UserProfile(change.getUniqueId(), change.getName());
+
+        GameMode gameMode = spectator ? GameMode.SPECTATOR : GameMode.valueOf(change.getGameMode().name());
+
+        WrapperPlayServerPlayerInfo.PlayerData playerInfoData = new WrapperPlayServerPlayerInfo.PlayerData(
+                Component.text(profile.getName()),
+                profile,
+                gameMode,
+                change.getPing()
+        );
+
+        WrapperPlayServerPlayerInfo packet = new WrapperPlayServerPlayerInfo(
+                WrapperPlayServerPlayerInfo.Action.UPDATE_GAME_MODE,
+                Collections.singletonList(playerInfoData)
+        );
+
+        PacketEvents.getAPI().getProtocolManager().sendPacket(p, packet);
     }
 }
